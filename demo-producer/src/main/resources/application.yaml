@@ -1,0 +1,22 @@
+spring:
+  cloud:
+    function:
+      definition: processor
+    stream:
+      default:
+        producer:
+          useNativeEncoding: true
+      kafka:
+        binder:
+          producer-properties:
+            value.serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+            key.serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+            schema.registry.url: http://localhost:8081
+      bindings:
+        processor-in-0:
+          destination: source
+          group: str-to-int-mapper
+          concurrency: 1
+        processor-out-0:
+          destination: string-input
+          content-type: application/*+avro
