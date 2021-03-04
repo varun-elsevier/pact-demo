@@ -36,7 +36,7 @@ interface TestBindings {
 }
 
 @Provider("string-provider")
-@PactFolder("/Users/sharm38/projects/ux/demos/demo-processor/build/pacts")
+@PactFolder("/Users/sharm38/projects/ux/demos/pact-demo/demo-processor/build/pacts")
 @SpringBootTest
 @EnableBinding(TestBindings.class)
 public class DemoProducerApplicationTests {

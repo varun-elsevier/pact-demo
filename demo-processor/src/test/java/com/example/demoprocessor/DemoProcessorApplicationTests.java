@@ -41,7 +41,7 @@ interface TestBindings {
 
 @SpringBootTest
 @ExtendWith(PactConsumerTestExt.class)
-@PactTestFor(providerType = ProviderType.SYNCH, providerName = "string-provider")
+@PactTestFor(providerType = ProviderType.ASYNCH, providerName = "string-provider")
 @EnableBinding(TestBindings.class)
 public class DemoProcessorApplicationTests {
     public static final String inputSchemaStr = "{\"type\": \"record\", \"name\": \"Input\", \"fields\": [{\"name\": \"value\", \"type\": \"string\"}]}";
@@ -104,10 +104,10 @@ public class DemoProcessorApplicationTests {
     @Pact(consumer = "str-to-int-mapper")
     MessagePact negativeNumberMessage(MessagePactBuilder builder) {
         PactDslJsonBody body = new PactDslJsonBody();
-        body.stringValue("value", "");
+        body.stringValue("value", "-5");
 
 
-        return builder.given("negative_number")
+        return builder.given("negative_number", singletonMap("value", "-5"))
                 .expectsToReceive("message with a negative number value")
                 .withContent(body)
                 .toPact();
