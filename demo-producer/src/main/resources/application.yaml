@@ -18,5 +18,5 @@ spring:
           group: str-to-int-mapper
           concurrency: 1
         processor-out-0:
-          destination: string-input
+          destination: authors
           content-type: application/*+avro

@@ -19,10 +19,16 @@ spring:
             schema.registry.url: http://localhost:8081
       bindings:
         processor-in-0:
-          destination: string-input
+          destination: authors
           content-type: application/*+avro
-          group: str-to-int-mapper
+          group: evaluation
           concurrency: 1
         processor-out-0:
-          destination: integer-output
+          destination: passed-evaluations
+          content-type: application/*+avro
+        processor-out-1:
+          destination: failed-evaluations
+          content-type: application/*+avro
+        processor-out-2:
+          destination: un-processable-evaluations
           content-type: application/*+avro

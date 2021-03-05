@@ -1,0 +1,15 @@
+{
+  "namespace": "foo",
+  "type": "record",
+  "name": "Author",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string"
+    },
+    {
+      "name": "confidence",
+      "type": "float"
+    }
+  ]
+}

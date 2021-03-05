@@ -9,9 +9,7 @@ import au.com.dius.pact.core.model.annotations.Pact;
 import au.com.dius.pact.core.model.messaging.MessagePact;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
+import foo.Author;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,28 +22,31 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.support.GenericMessage;
 
-import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
 interface TestBindings {
-    @Input("string-input")
-    MessageChannel stringInput();
+    @Input("authors")
+    MessageChannel input();
 
-    @Output("integer-output")
-    MessageChannel integerOutput();
+    @Output("passed-evaluations")
+    MessageChannel passedEvaluations();
+
+    @Output("failed-evaluations")
+    MessageChannel failedEvaluations();
+
+    @Output("un-processable-evaluations")
+    MessageChannel unProcessableEvaluations();
 }
 
 @SpringBootTest
 @ExtendWith(PactConsumerTestExt.class)
-@PactTestFor(providerType = ProviderType.ASYNCH, providerName = "string-provider")
+@PactTestFor(providerType = ProviderType.ASYNCH, providerName = "author-provider")
 @EnableBinding(TestBindings.class)
 public class DemoProcessorApplicationTests {
-    public static final String inputSchemaStr = "{\"type\": \"record\", \"name\": \"Input\", \"fields\": [{\"name\": \"value\", \"type\": \"string\"}]}";
-    public static final Schema inputSchema = new Schema.Parser().parse(inputSchemaStr);
 
     @Autowired
     private TestBindings testBindings;
@@ -53,89 +54,90 @@ public class DemoProcessorApplicationTests {
     @Autowired
     private MessageCollector messageCollector;
 
-    @Pact(consumer = "str-to-int-mapper")
-    MessagePact validNumberMessage(MessagePactBuilder builder) {
+    @Pact(consumer = "evaluation")
+    MessagePact highConfidenceAuthorPact(MessagePactBuilder builder) {
         PactDslJsonBody body = new PactDslJsonBody();
-        body.stringValue("value", "5");
+        body.stringValue("name", "Foo Bar");
+        body.decimalType("confidence", 0.90);
 
-        return builder.given("valid_number", singletonMap("value", "5"))
-                .expectsToReceive("message with a valid number value")
+        Map<String, ?> providerState = Map.of("name", "Foo Bar", "confidence", 0.90);
+
+        return builder.given("high_confidence_author", providerState)
+                .expectsToReceive("message with a high confidence author entity")
                 .withContent(body)
                 .toPact();
     }
 
     @Test
-    @PactTestFor(pactMethod = "validNumberMessage")
-    void convertsStringToIntAndSentToOutputChannel(MessagePact messagePact) throws InterruptedException, JsonProcessingException {
-        HashMap<String, String> map = pactBodyAsMap(messagePact);
+    @PactTestFor(pactMethod = "highConfidenceAuthorPact")
+    void verifyHighConfidenceAuthorProcessing(MessagePact messagePact) throws InterruptedException, JsonProcessingException {
+        Author author = pactBodyAsAuthor(messagePact);
+        testBindings.input().send(new GenericMessage<>(author));
 
-        testBindings.stringInput().send(new GenericMessage<>(inputRecordOf(map)));
+        BlockingQueue<Message<?>> channel = messageCollector.forChannel(testBindings.passedEvaluations());
+        Author result = (Author) channel.poll(2, TimeUnit.SECONDS).getPayload();
 
-        BlockingQueue<Message<?>> channel = messageCollector.forChannel(testBindings.integerOutput());
-        GenericRecord result = (GenericRecord) channel.poll(1, TimeUnit.SECONDS).getPayload();
-
-        assertThat(result.get("value")).isEqualTo(5);
+        assertThat(result.getName()).isEqualTo("Foo Bar");
+        assertThat(result.getConfidence()).isEqualTo(0.9f);
     }
 
-    @Pact(consumer = "str-to-int-mapper")
-    MessagePact invalidNumberMessage(MessagePactBuilder builder) {
+    @Pact(consumer = "evaluation")
+    MessagePact lowConfidenceAuthorPact(MessagePactBuilder builder) {
         PactDslJsonBody body = new PactDslJsonBody();
-        body.stringValue("value", "foo");
+        body.stringValue("name", "Foo Bar");
+        body.decimalType("confidence", 0.50);
 
-        return builder.given("invalid_number", singletonMap("value", "foo"))
-                .expectsToReceive("message with a invalid number value")
+        Map<String, ?> providerState = Map.of("name", "Foo Bar", "confidence", 0.50);
+
+        return builder.given("low_confidence_author", providerState)
+                .expectsToReceive("message with a low confidence author entity")
                 .withContent(body)
                 .toPact();
     }
 
     @Test
-    @PactTestFor(pactMethod = "invalidNumberMessage")
-    void invalidNumbersShouldNotHaveAnyMessagesPublishedOnOutputChannel(MessagePact messagePact) throws InterruptedException, JsonProcessingException {
-        HashMap<String, String> map = pactBodyAsMap(messagePact);
+    @PactTestFor(pactMethod = "lowConfidenceAuthorPact")
+    void verifyLowConfidenceAuthorProcessing(MessagePact messagePact) throws InterruptedException, JsonProcessingException {
+        Author author = pactBodyAsAuthor(messagePact);
+        testBindings.input().send(new GenericMessage<>(author));
 
-        testBindings.stringInput().send(new GenericMessage<>(inputRecordOf(map)));
+        BlockingQueue<Message<?>> channel = messageCollector.forChannel(testBindings.failedEvaluations());
+        Author result = (Author) channel.poll(2, TimeUnit.SECONDS).getPayload();
 
-        BlockingQueue<Message<?>> channel = messageCollector.forChannel(testBindings.integerOutput());
-        Message<?> message = channel.poll(1, TimeUnit.SECONDS);
-
-        assertThat(message).isNull();
+        assertThat(result.getName()).isEqualTo("Foo Bar");
+        assertThat(result.getConfidence()).isEqualTo(0.5f);
     }
 
-    @Pact(consumer = "str-to-int-mapper")
-    MessagePact negativeNumberMessage(MessagePactBuilder builder) {
+    @Pact(consumer = "evaluation")
+    MessagePact invalidConfidenceAuthorPact(MessagePactBuilder builder) {
         PactDslJsonBody body = new PactDslJsonBody();
-        body.stringValue("value", "-5");
+        body.stringValue("name", "Foo Bar");
+        body.decimalType("confidence", 1.50);
 
+        Map<String, ?> providerState = Map.of("name", "Foo Bar", "confidence", 1.50);
 
-        return builder.given("negative_number", singletonMap("value", "-5"))
-                .expectsToReceive("message with a negative number value")
+        return builder.given("invalid_confidence_author", providerState)
+                .expectsToReceive("message with a invalid confidence author entity")
                 .withContent(body)
                 .toPact();
     }
 
     @Test
-    @PactTestFor(pactMethod = "negativeNumberMessage")
-    void convertsNegativeNumberStringToIntAndSentToOutputChannel(MessagePact messagePact) throws InterruptedException, JsonProcessingException {
-        HashMap<String, String> map = pactBodyAsMap(messagePact);
+    @PactTestFor(pactMethod = "invalidConfidenceAuthorPact")
+    void verifyInvalidConfidenceAuthorProcessing(MessagePact messagePact) throws InterruptedException, JsonProcessingException {
+        Author author = pactBodyAsAuthor(messagePact);
+        testBindings.input().send(new GenericMessage<>(author));
 
-        testBindings.stringInput().send(new GenericMessage<>(inputRecordOf(map)));
+        BlockingQueue<Message<?>> channel = messageCollector.forChannel(testBindings.unProcessableEvaluations());
+        Author result = (Author) channel.poll(2, TimeUnit.SECONDS).getPayload();
 
-        BlockingQueue<Message<?>> channel = messageCollector.forChannel(testBindings.integerOutput());
-        GenericRecord result = (GenericRecord) channel.poll(1, TimeUnit.SECONDS).getPayload();
-
-        assertThat(result.get("value")).isEqualTo(-5);
+        assertThat(result.getName()).isEqualTo("Foo Bar");
+        assertThat(result.getConfidence()).isEqualTo(1.5f);
     }
 
-    private HashMap<String, String> pactBodyAsMap(MessagePact messagePact) throws JsonProcessingException {
+
+    private Author pactBodyAsAuthor(MessagePact messagePact) throws JsonProcessingException {
         String contents = messagePact.getMessages().get(0).contentsAsString();
-        HashMap<String, String> map = new ObjectMapper().readValue(contents, HashMap.class);
-        return map;
+        return new ObjectMapper().readValue(contents, Author.class);
     }
-
-    public static GenericRecord inputRecordOf(HashMap<String, String> map) {
-        GenericData.Record record = new GenericData.Record(inputSchema);
-        map.forEach(record::put);
-        return record;
-    }
-
 }

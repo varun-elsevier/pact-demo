@@ -9,7 +9,7 @@ import au.com.dius.pact.provider.junit5.PactVerificationInvocationContextProvide
 import au.com.dius.pact.provider.junitsupport.Provider;
 import au.com.dius.pact.provider.junitsupport.State;
 import au.com.dius.pact.provider.junitsupport.loader.PactFolder;
-import org.apache.avro.Schema;
+import foo.Author;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,20 +28,18 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 interface TestBindings {
-    @Output("string-input")
-    MessageChannel stringInput();
+    @Output("authors")
+    MessageChannel authors();
 
     @Input("source")
     MessageChannel source();
 }
 
-@Provider("string-provider")
+@Provider("author-provider")
 @PactFolder("/Users/sharm38/projects/ux/demos/pact-demo/demo-processor/build/pacts")
 @SpringBootTest
 @EnableBinding(TestBindings.class)
 public class DemoProducerApplicationTests {
-    public static final String inputSchemaStr = "{\"type\": \"record\", \"name\": \"Input\", \"fields\": [{\"name\": \"value\", \"type\": \"string\"}]}";
-    public static final Schema inputSchema = new Schema.Parser().parse(inputSchemaStr);
     public static final Logger LOGGER = LoggerFactory.getLogger(DemoProducerApplicationTests.class);
 
     @Autowired
@@ -63,44 +61,30 @@ public class DemoProducerApplicationTests {
         context.setTarget(new AmpqTestTarget());
     }
 
-    @State("valid_number")
-    public void validNumbersState(Map providerState) {
-        testBindings.source().send(new GenericMessage<>(providerState.get("value")));
+    @State({"high_confidence_author", "low_confidence_author", "invalid_confidence_author"})
+    public void highConfidenceAuthorState(Map providerState) {
+        testBindings.source().send(new GenericMessage<>(providerState));
     }
 
-    @PactVerifyProvider("message with a valid number value")
-    public String verifyValidNumber() throws InterruptedException {
-        Object payload = messageCollector.forChannel(testBindings.stringInput())
-                .poll(1, TimeUnit.SECONDS).getPayload();
-        System.out.println(payload);
-        return payload.toString();
+    @PactVerifyProvider("message with a high confidence author entity")
+    public String verifyHighConfidenceAuthor() throws InterruptedException {
+        Author author = (Author) messageCollector.forChannel(testBindings.authors())
+                .poll(2, TimeUnit.SECONDS).getPayload();
+        return author.toString();
     }
 
-    @State("invalid_number")
-    public void invalidNumbersState(Map providerState) {
-        testBindings.source().send(new GenericMessage<>(providerState.get("value")));
+    @PactVerifyProvider("message with a low confidence author entity")
+    public String verifyLowConfidenceAuthor() throws InterruptedException {
+        Author author = (Author) messageCollector.forChannel(testBindings.authors())
+                .poll(2, TimeUnit.SECONDS).getPayload();
+        return author.toString();
     }
 
-    @PactVerifyProvider("message with a invalid number value")
-    public String verifyInvalidNumber() throws InterruptedException {
-        Object payload = messageCollector.forChannel(testBindings.stringInput())
-                .poll(1, TimeUnit.SECONDS).getPayload();
-
-        return payload.toString();
+    @PactVerifyProvider("message with a invalid confidence author entity")
+    public String verifyInvalidConfidenceAuthor() throws InterruptedException {
+        Author author = (Author) messageCollector.forChannel(testBindings.authors())
+                .poll(2, TimeUnit.SECONDS).getPayload();
+        return author.toString();
     }
-
-    @State("negative_number")
-    public void negativeNumbersState(Map providerState) {
-        testBindings.source().send(new GenericMessage<>(providerState.get("value")));
-    }
-
-    @PactVerifyProvider("message with a negative number value")
-    public String verifyNegativeNumber() throws InterruptedException {
-        Object payload = messageCollector.forChannel(testBindings.stringInput())
-                .poll(1, TimeUnit.SECONDS).getPayload();
-
-        return payload.toString();
-    }
-
 }
 
