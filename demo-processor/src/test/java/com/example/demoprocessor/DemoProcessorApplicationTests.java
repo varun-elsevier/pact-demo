@@ -6,6 +6,8 @@ import au.com.dius.pact.consumer.junit5.PactConsumerTestExt;
 import au.com.dius.pact.consumer.junit5.PactTestFor;
 import au.com.dius.pact.consumer.junit5.ProviderType;
 import au.com.dius.pact.core.model.annotations.Pact;
+import au.com.dius.pact.core.model.generators.Category;
+import au.com.dius.pact.core.model.generators.RandomIntGenerator;
 import au.com.dius.pact.core.model.messaging.MessagePact;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -55,21 +57,21 @@ public class DemoProcessorApplicationTests {
     private MessageCollector messageCollector;
 
     @Pact(consumer = "evaluation")
-    MessagePact highConfidenceAuthorPact(MessagePactBuilder builder) {
+    MessagePact validConfidenceAuthor(MessagePactBuilder builder) {
         PactDslJsonBody body = new PactDslJsonBody();
         body.stringValue("name", "Foo Bar");
-        body.decimalType("confidence", 0.90);
+        body.decimalType("confidence", 0.6);
 
-        Map<String, ?> providerState = Map.of("name", "Foo Bar", "confidence", 0.90);
+        Map<String, ?> providerState = Map.of("name", "Foo Bar", "confidence", 0.6);
 
-        return builder.given("high_confidence_author", providerState)
-                .expectsToReceive("message with a high confidence author entity")
+        return builder.given("valid_confidence", providerState)
+                .expectsToReceive("message containing author entity with a valid confidence (between 0 and 1)")
                 .withContent(body)
                 .toPact();
     }
 
     @Test
-    @PactTestFor(pactMethod = "highConfidenceAuthorPact")
+    @PactTestFor(pactMethod = "validConfidenceAuthor")
     void verifyHighConfidenceAuthorProcessing(MessagePact messagePact) throws InterruptedException, JsonProcessingException {
         Author author = pactBodyAsAuthor(messagePact);
         testBindings.input().send(new GenericMessage<>(author));
@@ -78,63 +80,8 @@ public class DemoProcessorApplicationTests {
         Author result = (Author) channel.poll(2, TimeUnit.SECONDS).getPayload();
 
         assertThat(result.getName()).isEqualTo("Foo Bar");
-        assertThat(result.getConfidence()).isEqualTo(0.9f);
+        assertThat(result.getConfidence()).isEqualTo(0.6f);
     }
-
-    @Pact(consumer = "evaluation")
-    MessagePact lowConfidenceAuthorPact(MessagePactBuilder builder) {
-        PactDslJsonBody body = new PactDslJsonBody();
-        body.stringValue("name", "Foo Bar");
-        body.decimalType("confidence", 0.50);
-
-        Map<String, ?> providerState = Map.of("name", "Foo Bar", "confidence", 0.50);
-
-        return builder.given("low_confidence_author", providerState)
-                .expectsToReceive("message with a low confidence author entity")
-                .withContent(body)
-                .toPact();
-    }
-
-    @Test
-    @PactTestFor(pactMethod = "lowConfidenceAuthorPact")
-    void verifyLowConfidenceAuthorProcessing(MessagePact messagePact) throws InterruptedException, JsonProcessingException {
-        Author author = pactBodyAsAuthor(messagePact);
-        testBindings.input().send(new GenericMessage<>(author));
-
-        BlockingQueue<Message<?>> channel = messageCollector.forChannel(testBindings.failedEvaluations());
-        Author result = (Author) channel.poll(2, TimeUnit.SECONDS).getPayload();
-
-        assertThat(result.getName()).isEqualTo("Foo Bar");
-        assertThat(result.getConfidence()).isEqualTo(0.5f);
-    }
-
-    @Pact(consumer = "evaluation")
-    MessagePact invalidConfidenceAuthorPact(MessagePactBuilder builder) {
-        PactDslJsonBody body = new PactDslJsonBody();
-        body.stringValue("name", "Foo Bar");
-        body.decimalType("confidence", 1.50);
-
-        Map<String, ?> providerState = Map.of("name", "Foo Bar", "confidence", 1.50);
-
-        return builder.given("invalid_confidence_author", providerState)
-                .expectsToReceive("message with a invalid confidence author entity")
-                .withContent(body)
-                .toPact();
-    }
-
-    @Test
-    @PactTestFor(pactMethod = "invalidConfidenceAuthorPact")
-    void verifyInvalidConfidenceAuthorProcessing(MessagePact messagePact) throws InterruptedException, JsonProcessingException {
-        Author author = pactBodyAsAuthor(messagePact);
-        testBindings.input().send(new GenericMessage<>(author));
-
-        BlockingQueue<Message<?>> channel = messageCollector.forChannel(testBindings.unProcessableEvaluations());
-        Author result = (Author) channel.poll(2, TimeUnit.SECONDS).getPayload();
-
-        assertThat(result.getName()).isEqualTo("Foo Bar");
-        assertThat(result.getConfidence()).isEqualTo(1.5f);
-    }
-
 
     private Author pactBodyAsAuthor(MessagePact messagePact) throws JsonProcessingException {
         String contents = messagePact.getMessages().get(0).contentsAsString();

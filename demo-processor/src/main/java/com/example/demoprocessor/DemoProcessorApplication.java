@@ -18,11 +18,11 @@ public class DemoProcessorApplication {
     public static final Logger LOGGER = LoggerFactory.getLogger(DemoProcessorApplication.class);
 
     static Predicate<Author> highConfidenceFilter =
-            author -> author.getConfidence() >= 0.8 && author.getConfidence() <= 1;
+            author -> author.getConfidence() >= 8 && author.getConfidence() <= 10;
     static Predicate<Author> lowConfidenceFilter =
-            author -> author.getConfidence() > 0.0 && author.getConfidence() < 0.8;
+            author -> author.getConfidence() > 1 && author.getConfidence() < 8;
     static Predicate<Author> invalidEntityFilter =
-            author -> author.getConfidence() < 0 || author.getConfidence() > 1;
+            author -> author.getConfidence() < 1 || author.getConfidence() > 10;
 
     @Bean
     public Function<Flux<Author>, Tuple3<Flux<Author>, Flux<Author>, Flux<Author>>> processor() {
