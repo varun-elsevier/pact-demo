@@ -36,7 +36,8 @@ interface TestBindings {
 }
 
 @Provider("author-provider")
-@PactFolder("/Users/sharm38/projects/ux/demos/pact-demo/demo-processor/build/pacts")
+// NOTE: In production this will be replaced with a pact broker to get the contracts.
+@PactFolder("../demo-processor/build/pacts")
 @SpringBootTest
 @EnableBinding(TestBindings.class)
 public class DemoProducerApplicationTests {
@@ -61,27 +62,13 @@ public class DemoProducerApplicationTests {
         context.setTarget(new AmpqTestTarget());
     }
 
-    @State({"high_confidence_author", "low_confidence_author", "invalid_confidence_author"})
+    @State({"valid_confidence"})
     public void highConfidenceAuthorState(Map providerState) {
         testBindings.source().send(new GenericMessage<>(providerState));
     }
 
-    @PactVerifyProvider("message with a high confidence author entity")
+    @PactVerifyProvider("message containing author entity with a valid confidence (between 0 and 1)")
     public String verifyHighConfidenceAuthor() throws InterruptedException {
-        Author author = (Author) messageCollector.forChannel(testBindings.authors())
-                .poll(2, TimeUnit.SECONDS).getPayload();
-        return author.toString();
-    }
-
-    @PactVerifyProvider("message with a low confidence author entity")
-    public String verifyLowConfidenceAuthor() throws InterruptedException {
-        Author author = (Author) messageCollector.forChannel(testBindings.authors())
-                .poll(2, TimeUnit.SECONDS).getPayload();
-        return author.toString();
-    }
-
-    @PactVerifyProvider("message with a invalid confidence author entity")
-    public String verifyInvalidConfidenceAuthor() throws InterruptedException {
         Author author = (Author) messageCollector.forChannel(testBindings.authors())
                 .poll(2, TimeUnit.SECONDS).getPayload();
         return author.toString();
